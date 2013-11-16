@@ -1,0 +1,170 @@
+using UnityEngine;
+using System.Collections;
+
+public class OwnshiOldp : MonoBehaviour
+{
+
+	void Start()
+   {
+      this.name = "ownship";
+      this.cameraDriver.go = new GameObject();
+      this.cameraDriver.script = (CameraDriver)this.cameraDriver.go.AddComponent(typeof(CameraDriver));
+      this.cameraDriver.script.SetParent(this.transform);
+
+      /*
+      this.ostrich.go = (GameObject)Instantiate(Resources.Load("lance"));
+      this.ostrich.script = (Ostrich)this.ostrich.go.AddComponent(typeof(Ostrich));
+      this.ostrich.go.transform.parent = this.cameraDriver.go;
+      */
+
+      this.lance.go = (GameObject)Instantiate(Resources.Load("lance"));
+      this.lance.script = (Lance)this.lance.go.AddComponent(typeof(Lance));
+      this.lance.go.transform.parent = this.transform;
+
+      this.flightDynamics = new FlightDynamics();
+
+   }
+
+	void Update()
+   {
+      // set the on ground flag
+      bool onGround = (this.transform.position.y < ON_GROUND_THRESHOLD);
+
+      if (onGround || Input.GetKey("space"))
+      {
+         if (Input.GetKey("up"))
+         {
+            this.flightDynamics.ChangeSpeed (true, false);
+            /*
+            this.speed += SPEED_UP_INCREMENT;
+            if (this.speed > MAX_SPEED)
+            {
+               this.speed = MAX_SPEED;
+            }
+            */
+         }
+      }
+
+      if (Input.GetKey("down"))
+      {
+         this.flightDynamics.ChangeSpeed (false, true);
+         /*
+         this.speed -= SPEED_DOWN_INCREMENT;
+         if (this.speed < 0.0f)
+         {
+            this.speed = 0.0f;
+         }
+         */
+      }
+
+      // add to the vertical speed on each flap
+      if (Input.GetKeyDown("space"))
+      {
+         this.flightDynamics.Flap ();
+         //this.ySpeed += FLAP_INITIAL_VELOCITY;
+      }
+
+      // when in flight, process yaw and roll commands
+      if (Input.GetKey("left"))
+      {
+         this.transform.Rotate(new Vector3(0.0f, -YAW_INCREMENT, 0.0f), Space.Self);
+         if (!onGround)
+         {
+            this.roll += ROLL_INCREMENT;
+            if (this.roll > MAX_ROLL)
+            {
+               this.roll = MAX_ROLL;
+            }
+            this.transform.Rotate(Vector3.forward, ROLL_INCREMENT, Space.Self);
+         }
+      }
+      if (Input.GetKey("right"))
+      {
+         this.transform.Rotate(new Vector3(0.0f, YAW_INCREMENT, 0.0f), Space.Self);
+         if (!onGround)
+         {
+            this.roll -= ROLL_INCREMENT;
+            if (this.roll < -MAX_ROLL)
+            {
+               this.roll = -MAX_ROLL;
+            }
+            this.transform.Rotate(Vector3.forward, -ROLL_INCREMENT, Space.Self);
+         }
+      }
+
+      // stabilize the roll when no roll command is input
+      if (this.transform.eulerAngles.z < 180.0f)
+      {
+         this.transform.Rotate(Vector3.forward, -this.transform.eulerAngles.z * ROLL_WASHOUT_FACTOR, Space.Self);
+      }
+      else
+      {
+         this.transform.Rotate(Vector3.forward, -(this.transform.eulerAngles.z - 360.0f) * ROLL_WASHOUT_FACTOR, Space.Self);
+      }
+
+      // this makes sure the ownship is dampens out to straight and level
+      this.transform.Rotate(Vector3.right, -this.transform.eulerAngles.x * PITCH_WASHOUT_FACTOR, Space.Self);
+
+      // get the delta altitude to move this frame based on kinematics equations
+      float deltaY = this.ySpeed * Time.deltaTime + (0.5f * GRAVITY * Time.deltaTime * Time.deltaTime);
+      this.ySpeed = this.ySpeed + (GRAVITY * Time.deltaTime);
+
+      // if we hit the ceiling, reverse the speed and dampen it out
+      if (this.transform.position.y > CEILING && this.ySpeed > 0.0f)
+      {
+         this.ySpeed = -(this.ySpeed * CEILING_DAMPEN_FACTOR);
+      }
+
+      // we have hit the ground - don't change any altitude
+      if (this.transform.position.y < 0.0f)
+      {
+         this.transform.Translate(new Vector3(0.0f, -this.transform.position.y, 0.0f));
+         this.ySpeed = 0.0f;
+      }
+
+      // rotate the angles to change in yaw into the coordinate frame used in unity
+      float theta = (-this.transform.eulerAngles.y + 90.0f) * Mathf.Deg2Rad;
+
+      // perform the yaw and the vertical movements
+      //this.transform.Translate((new Vector3(Mathf.Cos(theta) * this.speed, this.ySpeed * Time.deltaTime, Mathf.Sin(theta) * this.speed)), Space.World);
+      //this.flightDynamics.Move (this.transform);
+      this.flightDynamics.Move (this.transform);
+      //this.transform.Translate((new Vector3(Mathf.Cos(theta) * this.speed, this.ySpeed * Time.deltaTime, Mathf.Sin(theta) * this.speed)), Space.World);
+
+
+      // tell the camera about the current ownship transform
+      this.cameraDriver.script.SetParent(this.transform);
+	}
+
+   public void SetEnemyPosition(Transform enemyPosition)
+   {
+      this.cameraDriver.script.SetEnemyPosition(enemyPosition);
+   }
+
+   private GlobalTypes.CameraDriverType cameraDriver;
+   private GlobalTypes.OstrichType ostrich;
+   private GlobalTypes.LanceType lance;
+
+   private float speed = 0.0f;
+   private float ySpeed = 0.0f;
+   private const float SPEED_UP_INCREMENT = 0.045f;
+   private const float SPEED_DOWN_INCREMENT = 0.03f;
+   private const float YAW_INCREMENT = .95f;
+   private const float MAX_SPEED = 2.0f;
+   private const float GRAVITY = -9.8f;
+   private const float FLAP_INITIAL_VELOCITY = 5.0f;
+   private const float ON_GROUND_THRESHOLD = 2.0f;
+   private const float MAX_ROLL = 10.0f;
+   private const float ROLL_INCREMENT = 1.0f;
+
+   private const float ROLL_WASHOUT_FACTOR = .05f;
+   private const float PITCH_WASHOUT_FACTOR = .02f;
+   private const float CEILING = 1000.0f;
+   private const float CEILING_DAMPEN_FACTOR = 0.5f;
+
+   private float roll = 0.0f;
+
+   private FlightDynamics flightDynamics;
+}
+
+
